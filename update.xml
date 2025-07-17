@@ -1,0 +1,13 @@
+<!-- update.xml di web server -->
+<?xml version="1.0" encoding="UTF-8"?>
+<item>
+  <version>1.0.0.2</version>
+  <url>https://websitemu.com/apps/KasirApp.zip</url>
+  <changelog>
+    <![CDATA[
+    - Perbaikan bug pembayaran
+    - Peningkatan performa
+    ]]>
+  </changelog>
+  <mandatory>false</mandatory>
+</item>
