@@ -3,7 +3,13 @@ set -euo pipefail
 
 # Path konfigurasi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-APP_REPO_DIR="$(cd "$SCRIPT_DIR/../dastrevas-gaspoll-pos-app-desktop" && pwd)"
+if [ -d "$SCRIPT_DIR/../gaspol-repo/dastrevas-gaspoll-pos-app-desktop" ]; then
+    APP_REPO_DIR="$(cd "$SCRIPT_DIR/../gaspol-repo/dastrevas-gaspoll-pos-app-desktop" && pwd)"
+elif [ -d "$SCRIPT_DIR/../dastrevas-gaspoll-pos-app-desktop" ]; then
+    APP_REPO_DIR="$(cd "$SCRIPT_DIR/../dastrevas-gaspoll-pos-app-desktop" && pwd)"
+else
+    APP_REPO_DIR="$HOME/Desktop/project-repo/gaspol-repo/dastrevas-gaspoll-pos-app-desktop"
+fi
 CSPROJ_PATH="$APP_REPO_DIR/KASIR.csproj"
 DESKTOP_BUILD_DIR="$HOME/Desktop/kasir-build"
 WINE_BIN="/Applications/Wine Staging.app/Contents/Resources/wine/bin/wine"
