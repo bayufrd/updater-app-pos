@@ -3,15 +3,16 @@ set -euo pipefail
 
 # Path konfigurasi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-if [ -d "$SCRIPT_DIR/../gaspol-repo/dastrevas-gaspoll-pos-app-desktop" ]; then
-    APP_REPO_DIR="$(cd "$SCRIPT_DIR/../gaspol-repo/dastrevas-gaspoll-pos-app-desktop" && pwd)"
-elif [ -d "$SCRIPT_DIR/../dastrevas-gaspoll-pos-app-desktop" ]; then
-    APP_REPO_DIR="$(cd "$SCRIPT_DIR/../dastrevas-gaspoll-pos-app-desktop" && pwd)"
+if [ -d "$SCRIPT_DIR/../dastrevas-gaspoll-pos-app-desktop" ]; then
+    REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+elif [ -d "$SCRIPT_DIR/../gaspol-repo/dastrevas-gaspoll-pos-app-desktop" ]; then
+    REPO_ROOT="$(cd "$SCRIPT_DIR/../gaspol-repo" && pwd)"
 else
-    APP_REPO_DIR="$HOME/Desktop/project-repo/gaspol-repo/dastrevas-gaspoll-pos-app-desktop"
+    REPO_ROOT="$HOME/Desktop/project-repo/gaspol-repo"
 fi
+APP_REPO_DIR="$REPO_ROOT/dastrevas-gaspoll-pos-app-desktop"
 CSPROJ_PATH="$APP_REPO_DIR/KASIR.csproj"
-DESKTOP_BUILD_DIR="$HOME/Desktop/kasir-build"
+KASIR_BUILD_DIR="$REPO_ROOT/kasir-build"
 WINE_BIN="/Applications/Wine Staging.app/Contents/Resources/wine/bin/wine"
 
 increment_version() {
@@ -41,18 +42,29 @@ increment_version() {
 }
 
 run_app() {
-    echo "===================================================="
-    echo " [1/2] Mem-build KASIR ke $DESKTOP_BUILD_DIR..."
-    echo "===================================================="
-    mkdir -p "$DESKTOP_BUILD_DIR"
-    dotnet publish "$CSPROJ_PATH" -c Debug -r win-x64 --self-contained true -o "$DESKTOP_BUILD_DIR"
+    local wine_pid=""
+    local log_dir="$KASIR_BUILD_DIR/log"
+    local log_pid=""
 
-    cat > "$DESKTOP_BUILD_DIR/Jalankan-KASIR.command" << 'EOF'
+    cleanup_run() {
+        [ -n "$log_pid" ] && kill "$log_pid" 2>/dev/null || true
+        [ -n "$wine_pid" ] && wait "$wine_pid" 2>/dev/null || true
+    }
+
+    trap cleanup_run EXIT INT TERM
+
+    echo "===================================================="
+    echo " [1/2] Mem-build KASIR ke $KASIR_BUILD_DIR..."
+    echo "===================================================="
+    mkdir -p "$KASIR_BUILD_DIR"
+    dotnet publish "$CSPROJ_PATH" -c Debug -r win-x64 --self-contained true -o "$KASIR_BUILD_DIR"
+
+    cat > "$KASIR_BUILD_DIR/Jalankan-KASIR.command" << 'EOF'
 #!/bin/bash
 cd "$(dirname "$0")"
 "/Applications/Wine Staging.app/Contents/Resources/wine/bin/wine" KASIR.exe
 EOF
-    chmod +x "$DESKTOP_BUILD_DIR/Jalankan-KASIR.command"
+    chmod +x "$KASIR_BUILD_DIR/Jalankan-KASIR.command"
 
     if [ ! -x "$WINE_BIN" ]; then
         echo "Error: Wine Staging tidak ditemukan di $WINE_BIN"
@@ -61,9 +73,23 @@ EOF
 
     echo "===================================================="
     echo " [2/2] Menjalankan KASIR.exe dengan Wine Staging..."
+    echo " Log realtime: $log_dir"
     echo "===================================================="
-    cd "$DESKTOP_BUILD_DIR"
-    "$WINE_BIN" KASIR.exe
+    cd "$KASIR_BUILD_DIR"
+    "$WINE_BIN" KASIR.exe &
+    wine_pid=$!
+
+    while kill -0 "$wine_pid" 2>/dev/null; do
+        if compgen -G "$log_dir/*_log*.txt" > /dev/null; then
+            echo "[LOG] Memantau fallback WebView2. Cari Event=LocalBridgeStarted Url=http://127.0.0.1:<port>/"
+            tail -F "$log_dir"/*_log*.txt &
+            log_pid=$!
+            break
+        fi
+        sleep 1
+    done
+
+    wait "$wine_pid"
 }
 
 deploy_app() {
@@ -135,7 +161,7 @@ deploy_app() {
 
 usage() {
     echo "Penggunaan:"
-    echo "  ./setup.sh --run                Build KASIR ke ~/Desktop/kasir-build dan jalankan di Mac"
+    echo "  ./setup.sh --run                Build KASIR ke $KASIR_BUILD_DIR dan jalankan di Mac"
     echo "  ./setup.sh --deploy [versi]     Build win-x86, update update.zip, naikkan version.txt, lalu git commit & push"
 }
 
