@@ -22,6 +22,8 @@ param(
 
     [switch]$NotSupportedRollback,
 
+    [switch]$SkipVersionCheck,
+
     [string]$Repo = "bayufrd/updater-app-pos"
 )
 
@@ -57,6 +59,32 @@ if (-not (Test-Path $ZipPath)) {
 $zipItem = Get-Item $ZipPath
 if ($zipItem.Length -lt 1024) {
     throw "File zip terlalu kecil / korup ($($zipItem.Length) bytes): $ZipPath"
+}
+
+# Validasi versi KASIR.dll di dalam .zip agar sinkron dengan tag release
+if (-not $SkipVersionCheck.IsPresent) {
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $tempDll = [System.IO.Path]::GetTempFileName()
+    try {
+        $zip = [System.IO.Compression.ZipFile]::OpenRead($zipItem.FullName)
+        try {
+            $dllEntry = $zip.Entries | Where-Object { $_.FullName -ieq "KASIR.dll" } | Select-Object -First 1
+            if ($null -eq $dllEntry) {
+                throw "KASIR.dll tidak ditemukan di dalam $($zipItem.Name). Gunakan -SkipVersionCheck jika memang disengaja."
+            }
+            $stream = $dllEntry.Open()
+            $fs = [System.IO.File]::Create($tempDll)
+            try { $stream.CopyTo($fs) } finally { $fs.Dispose(); $stream.Dispose() }
+        } finally {
+            $zip.Dispose()
+        }
+        $dllFileVersion = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($tempDll).FileVersion
+        if ($dllFileVersion -ne $cleanVersion) {
+            throw "Versi KASIR.dll di dalam $($zipItem.Name) adalah '$dllFileVersion', tidak cocok dengan target release '$cleanVersion'. Perbarui <Version>/<AssemblyVersion>/<FileVersion> di KASIR.csproj lalu build ulang (atau gunakan -SkipVersionCheck untuk arsip lama)."
+        }
+    } finally {
+        if (Test-Path $tempDll) { Remove-Item $tempDll -Force -ErrorAction SilentlyContinue }
+    }
 }
 
 # Cek apakah tag/release sudah ada

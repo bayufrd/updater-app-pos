@@ -106,6 +106,18 @@ deploy_app() {
         exit 1
     fi
 
+    local current_version="1.3.0.0"
+    if [ -f "$SCRIPT_DIR/version.txt" ]; then
+        current_version="$(tr -d '[:space:]' < "$SCRIPT_DIR/version.txt")"
+    fi
+
+    local next_version
+    if [ -n "$custom_version" ]; then
+        next_version="$custom_version"
+    else
+        next_version="$(increment_version "$current_version")"
+    fi
+
     echo "===================================================="
     echo " [1/5] Mengekstrak update.zip ke folder update/..."
     echo "===================================================="
@@ -114,16 +126,23 @@ deploy_app() {
     unzip -q "$SCRIPT_DIR/update.zip" -d "$update_dir"
 
     echo "===================================================="
-    echo " [2/5] Mem-build KASIR (Release, win-x86)..."
+    echo " [2/5] Mem-build KASIR v$next_version (Release, win-x86)..."
     echo "===================================================="
-    dotnet publish "$CSPROJ_PATH" -c Release -r win-x86 --self-contained false -o "$tmp_build_dir"
+    dotnet publish "$CSPROJ_PATH" -c Release -r win-x86 --self-contained false \
+        -p:Version="$next_version" -p:AssemblyVersion="$next_version" -p:FileVersion="$next_version" \
+        -o "$tmp_build_dir"
 
     echo "===================================================="
-    echo " [3/5] Menyalin hasil build ke update/ (tanpa KASIR.dll.config & tanpa folder)..."
+    echo " [3/5] Menyalin hasil build ke update/ (termasuk webui/ & runtimes/, tanpa KASIR.dll.config & logoOutlet)..."
     echo "===================================================="
-    rm -f "$tmp_build_dir/KASIR.dll.config"
-    find "$tmp_build_dir" -mindepth 1 -maxdepth 1 -type d -exec rm -rf {} +
-    cp -f "$tmp_build_dir"/* "$update_dir"/
+    rm -f "$tmp_build_dir/KASIR.dll.config" "$update_dir/KASIR.dll.config"
+    if [ -d "$tmp_build_dir/icon" ]; then
+        find "$tmp_build_dir/icon" -maxdepth 1 -type f \( -iname "*outletlogo*" -o -iname "*logooutlet*" \) -delete
+    fi
+    if [ -d "$update_dir/icon" ]; then
+        find "$update_dir/icon" -maxdepth 1 -type f \( -iname "*outletlogo*" -o -iname "*logooutlet*" \) -delete
+    fi
+    cp -Rf "$tmp_build_dir"/. "$update_dir"/
 
     echo "===================================================="
     echo " [4/5] Membuat ulang update.zip & menghapus folder update/..."
@@ -138,18 +157,6 @@ deploy_app() {
     echo "===================================================="
     echo " [5/5] Mengupdate version.txt, Git Commit & Push..."
     echo "===================================================="
-    local current_version="1.3.0.0"
-    if [ -f "$SCRIPT_DIR/version.txt" ]; then
-        current_version="$(tr -d '[:space:]' < "$SCRIPT_DIR/version.txt")"
-    fi
-
-    local next_version
-    if [ -n "$custom_version" ]; then
-        next_version="$custom_version"
-    else
-        next_version="$(increment_version "$current_version")"
-    fi
-
     printf "%s" "$next_version" > "$SCRIPT_DIR/version.txt"
     echo "Versi diupdate: $current_version -> $next_version"
 

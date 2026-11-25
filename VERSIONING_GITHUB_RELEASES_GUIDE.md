@@ -49,10 +49,19 @@ flowchart LR
 
 Karena proses build dan pengemasan `.zip` tetap dilakukan secara manual:
 
-### Langkah 1: Siapkan Paket `.zip`
-1. Build project `KASIR.csproj` dengan konfigurasi `Release` (`win-x86`).
-2. Pastikan file konfigurasi lokal outlet seperti `KASIR.dll.config` **tidak ikut** dimasukkan ke dalam `.zip` (mengikuti aturan yang sudah ada di `setup.sh`), agar setting printer/outlet di PC kasir tidak tertimpa.
-3. Kemas hasil build menjadi file `.zip`, disarankan dengan penamaan konsisten, misalnya:
+### Langkah 1: Set Versi di `KASIR.csproj` & Siapkan Paket `.zip`
+1. **Wajib perbarui versi assembly di `dastrevas-gaspoll-pos-app-desktop/KASIR.csproj`** sebelum compile/publish:
+   ```xml
+   <Version>1.3.1.2</Version>
+   <AssemblyVersion>1.3.1.2</AssemblyVersion>
+   <FileVersion>1.3.1.2</FileVersion>
+   ```
+   *(Atau kirim via parameter CLI saat build: `-p:Version=1.3.1.2 -p:AssemblyVersion=1.3.1.2 -p:FileVersion=1.3.1.2`.)*  
+   > [!IMPORTANT]
+   > `VersionManager` di POS Desktop menjadikan versi assembly `KASIR.dll` sebagai **source of truth**. Jika `KASIR.dll` tidak ikut diperbarui versinya saat compile, outlet bisa mengalami desinkronisasi versi (tercatat sudah update di `version.data`/`settings.db`, padahal kode yang berjalan masih versi lama).
+2. Build / publish project `KASIR.csproj` dengan konfigurasi `Release` (`win-x86`).
+3. Pastikan file konfigurasi lokal outlet seperti `KASIR.dll.config` **tidak ikut** dimasukkan ke dalam `.zip` (mengikuti aturan yang sudah ada di `setup.sh`), agar setting printer/outlet di PC kasir tidak tertimpa.
+4. Kemas hasil build menjadi file `.zip`, disarankan dengan penamaan konsisten, misalnya:
    - `update.zip` (atau `KASIR-v1.3.1.2.zip` — pastikan aturan nama asset konsisten dengan parser di `gaspol-api`).
 
 ### Langkah 2: Buat GitHub Release di `updater-app-pos`
@@ -236,9 +245,10 @@ Bagian ini adalah instruksi standar bagi **AI Agent** setiap kali user menaruh f
 
 ### Langkah Eksekusi Agent
 
-1. **Cari & Validasi Paket `.zip`**
-   - Lokasi default: `C:\Users\bayuf\Desktop\updater-app-pos\update.zip` (atau file `.zip` terbaru selain `Dastrevas.zip` jika user menaruh nama lain di folder `updater-app-pos`).
-   - Pastikan isi `.zip` valid (berisi `KASIR.dll` / `KASIR.exe`) dan **tidak mengandung** `KASIR.dll.config` agar setting outlet tidak tertimpa.
+1. **Build (jika diminta) & Validasi Paket `.zip`**
+   - **Jika agent melakukan build/compile dari `dastrevas-gaspoll-pos-app-desktop`:** wajib perbarui `<Version>`, `<AssemblyVersion>`, dan `<FileVersion>` di `KASIR.csproj` ke `<next_version>` (atau pass `-p:Version=<next_version> -p:AssemblyVersion=<next_version> -p:FileVersion=<next_version>` saat `dotnet publish`) sebelum mengemas `.zip`.
+   - Lokasi default paket: `C:\Users\bayuf\Desktop\updater-app-pos\update.zip` (atau file `.zip` terbaru selain `Dastrevas.zip` jika user menaruh nama lain di folder `updater-app-pos`).
+   - Pastikan isi `.zip` valid (berisi `KASIR.dll` / `KASIR.exe`), **versi `KASIR.dll` di dalam `.zip` sudah sesuai `<next_version>`**, dan **tidak mengandung** `KASIR.dll.config` agar setting outlet tidak tertimpa.
 
 2. **Tentukan Nomor Versi Berikutnya (Counting Otomatis)**
    - Ambil tag release terbaru dari GitHub:
